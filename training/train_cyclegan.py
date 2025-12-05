@@ -1,0 +1,193 @@
+import wandb
+import torch
+from torch.utils.data import Dataset, DataLoader
+from models.cyclegan import Generator, Discriminator
+from training.checkpoint_manager import CheckpointManager
+from training.losses import identity_loss, cycle_consistency_loss, adversarial_loss
+from training.monet_dataset import MonetDataset, get_transforms
+
+
+def train_cyclegan(config):
+    """
+      Main training function for CycleGAN.
+
+      Args:
+          config (dict): Dictionary containing the hyperparameters and configuration for training.
+
+      Configuration Dictionary (config):
+          - 'num_residual_blocks' (int): Number of residual blocks in the generator.
+          - 'lr' (float): Learning rate for the Adam optimizer.
+          - 'batch_size' (int): Batch size for training.
+          - 'image_size' (int): The target image size for resizing.
+          - 'lambda_cycle' (float): Weight for the cycle consistency loss.
+          - 'lambda_identity' (float): Weight for the identity loss.
+          - 'num_epochs' (int): Total number of training epochs.
+          - 'save_every' (int): Frequency (in epochs) to save checkpoints.
+          - 'resume_training' (bool): Whether to resume training from the last checkpoint.
+          - 'monet_dir' (str, optional, default='/content/painter-gan/data/monet_jpg'): 
+              Path to Monet dataset directory.
+          - 'photo_dir' (str, optional, default='/content/painter-gan/data/photo_jpg'): 
+              Path to Photo dataset directory.
+          - 'base_dir' (str, optional, default='/content/drive/MyDrive/paint-gan-checkpoints'):
+              Base directory to store checkpoints.
+          - 'run_id' (str, optional, default=wandb.run.id): 
+              The run ID for W&B logging. If not provided, uses the current W&B run ID.
+      
+      Note:
+          All parameters are required except 'monet_dir', 'photo_dir', and 'run_id' 
+          which have default values.
+      """
+    # Initialize WANDB
+    wandb.init(project="monet-cyclegan", config=config)
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    # Initialize models
+    G_XtoY = Generator(num_residual_blocks=config['num_residual_blocks']).to(device)
+    G_YtoX = Generator(num_residual_blocks=config['num_residual_blocks']).to(device)
+    D_X = Discriminator().to(device)
+    D_Y = Discriminator().to(device)
+    
+    # Initialize optimizers
+    g_optimizer = torch.optim.Adam(
+        list(G_XtoY.parameters()) + list(G_YtoX.parameters()),
+        lr=config['lr'],
+        betas=(0.5, 0.999)
+    )
+    d_x_optimizer = torch.optim.Adam(D_X.parameters(), lr=config['lr'], betas=(0.5, 0.999))
+    d_y_optimizer = torch.optim.Adam(D_Y.parameters(), lr=config['lr'], betas=(0.5, 0.999))
+    
+    # Data loading
+    dataset = MonetDataset(
+        monet_dir=config.get("monet_dir", "/content/painter-gan/data/monet_jpg"),
+        photo_dir=config.get("photo_dir", "/content/painter-gan/data/photo_jpg"),
+        transform=get_transforms(config['image_size'])
+    )
+    dataloader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True, num_workers=2)
+    
+    # Checkpoint manager
+    run_id = config.get("run_id", wandb.run.id)
+    base_dir = config.get("base_dir", "/content/drive/MyDrive/paint-gan-checkpoints")
+    checkpoint_manager = CheckpointManager(
+        base_dir = base_dir,
+        run_id=run_id,
+        max_checkpoints=3
+    )
+    
+    # Resume from checkpoint if exists
+    start_epoch = 0
+    latest_checkpoint = checkpoint_manager.get_latest_checkpoint()
+    if latest_checkpoint and config['resume_training']:
+        models = {'G_XtoY': G_XtoY, 'G_YtoX': G_YtoX, 'D_X': D_X, 'D_Y': D_Y}
+        optimizers = {'G_opt': g_optimizer, 'D_X_opt': d_x_optimizer, 'D_Y_opt': d_y_optimizer}
+        start_epoch, _ = checkpoint_manager.load_checkpoint(latest_checkpoint, models, optimizers)
+        start_epoch += 1
+    
+    # Training loop
+    for epoch in range(start_epoch, config['num_epochs']):
+        G_XtoY.train()
+        G_YtoX.train()
+        D_X.train()
+        D_Y.train()
+        
+        epoch_g_loss = 0
+        epoch_d_loss = 0
+        
+        for i, (real_X, real_Y) in enumerate(dataloader):
+            real_X = real_X.to(device)
+            real_Y = real_Y.to(device)
+            
+            # ============ Train Generators ============
+            g_optimizer.zero_grad()
+            
+            # Generate fake images
+            fake_Y = G_XtoY(real_X)
+            fake_X = G_YtoX(real_Y)
+            
+            # Adversarial loss
+            pred_fake_Y = D_Y(fake_Y)
+            pred_fake_X = D_X(fake_X)
+            loss_G_XtoY = adversarial_loss(pred_fake_Y, True)
+            loss_G_YtoX = adversarial_loss(pred_fake_X, True)
+            
+            # Cycle consistency loss
+            reconstructed_X = G_YtoX(fake_Y)
+            reconstructed_Y = G_XtoY(fake_X)
+            loss_cycle_X = cycle_consistency_loss(real_X, reconstructed_X, config['lambda_cycle'])
+            loss_cycle_Y = cycle_consistency_loss(real_Y, reconstructed_Y, config['lambda_cycle'])
+            
+            # Identity loss
+            identity_X = G_YtoX(real_X)
+            identity_Y = G_XtoY(real_Y)
+            loss_identity_X = identity_loss(real_X, identity_X, config['lambda_identity'])
+            loss_identity_Y = identity_loss(real_Y, identity_Y, config['lambda_identity'])
+            
+            # Total generator loss
+            g_loss = (loss_G_XtoY + loss_G_YtoX + 
+                     loss_cycle_X + loss_cycle_Y + 
+                     loss_identity_X + loss_identity_Y)
+            
+            g_loss.backward()
+            g_optimizer.step()
+            
+            # ============ Train Discriminators ============
+            # Discriminator X
+            d_x_optimizer.zero_grad()
+            pred_real_X = D_X(real_X)
+            loss_D_real_X = adversarial_loss(pred_real_X, True)
+            pred_fake_X = D_X(fake_X.detach())
+            loss_D_fake_X = adversarial_loss(pred_fake_X, False)
+            d_x_loss = (loss_D_real_X + loss_D_fake_X) * 0.5
+            d_x_loss.backward()
+            d_x_optimizer.step()
+            
+            # Discriminator Y
+            d_y_optimizer.zero_grad()
+            pred_real_Y = D_Y(real_Y)
+            loss_D_real_Y = adversarial_loss(pred_real_Y, True)
+            pred_fake_Y = D_Y(fake_Y.detach())
+            loss_D_fake_Y = adversarial_loss(pred_fake_Y, False)
+            d_y_loss = (loss_D_real_Y + loss_D_fake_Y) * 0.5
+            d_y_loss.backward()
+            d_y_optimizer.step()
+            
+            epoch_g_loss += g_loss.item()
+            epoch_d_loss += (d_x_loss.item() + d_y_loss.item())
+            
+            # Log to WANDB every N steps
+            if i % 50 == 0:
+                wandb.log({
+                    'batch_g_loss': g_loss.item(),
+                    'batch_d_loss': (d_x_loss.item() + d_y_loss.item()),
+                    'loss_G_XtoY': loss_G_XtoY.item(),
+                    'loss_cycle': (loss_cycle_X.item() + loss_cycle_Y.item()),
+                    'loss_identity': (loss_identity_X.item() + loss_identity_Y.item()),
+                })
+        
+        # Log epoch metrics
+        avg_g_loss = epoch_g_loss / len(dataloader)
+        avg_d_loss = epoch_d_loss / len(dataloader)
+        
+        print(f"Epoch [{epoch+1}/{config['num_epochs']}] - G Loss: {avg_g_loss:.4f}, D Loss: {avg_d_loss:.4f}")
+        
+        wandb.log({
+            'epoch': epoch,
+            'epoch_g_loss': avg_g_loss,
+            'epoch_d_loss': avg_d_loss,
+        })
+        
+        # Save checkpoint every N epochs
+        if (epoch + 1) % config['save_every'] == 0:
+            models = {'G_XtoY': G_XtoY, 'G_YtoX': G_YtoX, 'D_X': D_X, 'D_Y': D_Y}
+            optimizers = {'G_opt': g_optimizer, 'D_X_opt': d_x_optimizer, 'D_Y_opt': d_y_optimizer}
+            metrics = {'g_loss': avg_g_loss, 'd_loss': avg_d_loss}
+            checkpoint_manager.save_checkpoint(epoch, models, optimizers, metrics)
+            
+            # Log sample images
+            with torch.no_grad():
+                sample_fake_Y = G_XtoY(real_X[:4])
+                wandb.log({
+                    "generated_images": [wandb.Image(img) for img in sample_fake_Y]
+                })
+    
+    wandb.finish()
