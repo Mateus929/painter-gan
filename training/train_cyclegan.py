@@ -1,5 +1,6 @@
 import wandb
 import torch
+import uuid
 from torch.utils.data import Dataset, DataLoader
 from models.cyclegan import Generator, Discriminator
 from training.checkpoint_manager import CheckpointManager
@@ -22,8 +23,10 @@ def train_cyclegan(config):
           - 'lambda_cycle' (float): Weight for the cycle consistency loss.
           - 'lambda_identity' (float): Weight for the identity loss.
           - 'num_epochs' (int): Total number of training epochs.
-          - 'save_every' (int): Frequency (in epochs) to save checkpoints.
+          - 'save_every' (int, default=10): Frequency (in epochs) to save checkpoints.
           - 'resume_training' (bool): Whether to resume training from the last checkpoint.
+          - 'run_name' (str)
+              Name of the current run that will be logged on wandb.
           - 'monet_dir' (str, optional, default='/content/painter-gan/data/monet_jpg'): 
               Path to Monet dataset directory.
           - 'photo_dir' (str, optional, default='/content/painter-gan/data/photo_jpg'): 
@@ -31,14 +34,22 @@ def train_cyclegan(config):
           - 'base_dir' (str, optional, default='/content/drive/MyDrive/paint-gan-checkpoints'):
               Base directory to store checkpoints.
           - 'run_id' (str, optional, default=wandb.run.id): 
-              The run ID for W&B logging. If not provided, uses the current W&B run ID.
+              The run ID for W&B logging. If not provided, uses random ID. 
+              If this is set, make sure resume_training is set as well.
       
       Note:
           All parameters are required except 'monet_dir', 'photo_dir', and 'run_id' 
           which have default values.
       """
     # Initialize WANDB
-    wandb.init(project="monet-cyclegan", config=config)
+
+    run_id = ""
+    if "run_id" in config and config["run_id"]:
+        run_id = config["run_id"]
+    else:
+        run_id = uuid.uuid4().hex[:8]
+
+    wandb.init(project="monet-cyclegan", config=config, name=config["run_name"], id=run_id, resume="allow")
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
@@ -66,7 +77,6 @@ def train_cyclegan(config):
     dataloader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True, num_workers=2)
     
     # Checkpoint manager
-    run_id = config.get("run_id", wandb.run.id)
     base_dir = config.get("base_dir", "/content/drive/MyDrive/paint-gan-checkpoints")
     checkpoint_manager = CheckpointManager(
         base_dir = base_dir,
@@ -177,7 +187,7 @@ def train_cyclegan(config):
         })
         
         # Save checkpoint every N epochs
-        if (epoch + 1) % config['save_every'] == 0:
+        if (epoch + 1) % config.get('save_every', 10) == 0:
             models = {'G_XtoY': G_XtoY, 'G_YtoX': G_YtoX, 'D_X': D_X, 'D_Y': D_Y}
             optimizers = {'G_opt': g_optimizer, 'D_X_opt': d_x_optimizer, 'D_Y_opt': d_y_optimizer}
             metrics = {'g_loss': avg_g_loss, 'd_loss': avg_d_loss}
