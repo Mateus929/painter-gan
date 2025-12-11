@@ -128,6 +128,8 @@ def train_cyclegan(config):
         
         epoch_g_loss = 0
         epoch_d_loss = 0
+        epoch_loss_cycle = 0
+        epoch_loss_identity = 0
         
         for i, (real_X, real_Y) in enumerate(dataloader):
             real_X = real_X.to(device)
@@ -189,7 +191,9 @@ def train_cyclegan(config):
             
             epoch_g_loss += g_loss.item()
             epoch_d_loss += (d_x_loss.item() + d_y_loss.item())
-            
+            epoch_loss_cycle += (loss_cycle_X.item() + loss_cycle_Y.item())
+            epoch_loss_identity += (loss_identity_X.item() + loss_identity_Y.item())
+
             # Log to WANDB every N steps
             if i % 50 == 0:
                 vprint(f"Batch [{i+1}/{len(dataloader)}] - G Loss: {g_loss.item():.4f}, D Loss: {(d_x_loss.item() + d_y_loss.item()):.4f}", level=2)
@@ -213,6 +217,8 @@ def train_cyclegan(config):
         # Log epoch metrics
         avg_g_loss = epoch_g_loss / len(dataloader)
         avg_d_loss = epoch_d_loss / len(dataloader)
+        avg_loss_cycle = epoch_loss_cycle / len(dataloader)
+        avg_loss_identity = epoch_loss_identity / len(dataloader)
         
         vprint(f"Epoch [{epoch+1}/{config['num_epochs']}] - G Loss: {avg_g_loss:.4f}, D Loss: {avg_d_loss:.4f}", level=1)
         
@@ -220,6 +226,8 @@ def train_cyclegan(config):
             'epoch': epoch,
             'epoch_g_loss': avg_g_loss,
             'epoch_d_loss': avg_d_loss,
+            'epoch_loss_cycle' : avg_loss_cycle,
+            'epoch_loss_identity' : avg_loss_identity
         })
 
         # ============ EVALUATION ============
