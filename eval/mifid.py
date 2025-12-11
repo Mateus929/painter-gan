@@ -56,7 +56,8 @@ def mifid(model,
     
     # Step 1: Generate images if needed
     if generate or generated_images_dir is None:
-        generated_images_dir = '/tmp/mifid_generated'
+        if generated_images_dir is None:
+            generated_images_dir = '/content/tmp/mifid_generated'
         os.makedirs(generated_images_dir, exist_ok=True)
         if verbose:
             print("\n[1/3] Generating images...")
