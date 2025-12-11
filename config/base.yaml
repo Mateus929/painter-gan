@@ -1,0 +1,19 @@
+run_name: "cyclegan-default"
+
+# Training Behavior
+resume_training: false
+num_epochs: 100
+save_every: 5
+eval_every: 10
+
+# Model Architecture
+num_residual_blocks: 9
+image_size: 256
+
+# Optimization
+lr: 0.0002
+batch_size: 1
+
+# Custom Constraints
+cosine_threshold: 0.5
+penalty_weight: 100

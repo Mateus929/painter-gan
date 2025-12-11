@@ -25,7 +25,7 @@ def train_cyclegan(config):
           - 'lambda_cycle' (float): Weight for the cycle consistency loss.
           - 'lambda_identity' (float): Weight for the identity loss.
           - 'num_epochs' (int): Total number of training epochs.
-          - 'cosine threashold' (defauls 0.5): Threashold for cosine similarity in mifid.
+          - 'cosine_threashold' (defauls 0.5): Threashold for cosine similarity in mifid.
           - 'penalty_weight' (default 100): Penaly for memorization in mifid.
           - 'save_every' (int, default=10): Frequency (in epochs) to save checkpoints.
           - 'eval_every' (int, default=10): Frequency (in epochs) to eval models.
