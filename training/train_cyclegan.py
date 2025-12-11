@@ -115,6 +115,9 @@ def train_cyclegan(config):
         start_epoch += 1
         vprint(f"Resuming from epoch {start_epoch}", level=1)
     
+    
+    best_mifid = float('inf')
+
     # Training loop
     vprint(f"\nStarting training for {config['num_epochs'] - start_epoch} epochs...\n", level=1)
     for epoch in range(start_epoch, config['num_epochs']):
@@ -220,6 +223,7 @@ def train_cyclegan(config):
         })
 
         # ============ EVALUATION ============
+        is_best = False
         eval_every = config.get('eval_every', 10)
         if (epoch + 1) % eval_every == 0:
             
@@ -232,7 +236,7 @@ def train_cyclegan(config):
                 generator=G_XtoY,
                 config=config,
                 epoch=epoch,
-                eval_images_dir="tmp/run_id",
+                eval_images_dir=f"tmp/{run_id}",
                 device=device
             )
             
@@ -252,17 +256,7 @@ def train_cyclegan(config):
             if eval_result['mifid'] < best_mifid:
                 best_mifid = eval_result['mifid']
                 vprint(f"New best MiFID: {best_mifid:.4f} (saving checkpoint)", level=1)
-                
-                best_checkpoint_path = os.path.join(config['base_dir'], 'best_model.pth')
-                torch.save({
-                    'epoch': epoch,
-                    'G_XtoY_state_dict': G_XtoY.state_dict(),
-                    'G_YtoX_state_dict': G_YtoX.state_dict(),
-                    'D_X_state_dict': D_X.state_dict(),
-                    'D_Y_state_dict': D_Y.state_dict(),
-                    'mifid': best_mifid
-                }, best_checkpoint_path)
-                
+                is_best = True
                 wandb.log({'best_mifid': best_mifid})
             
             print("="*80 + "\n")
@@ -272,12 +266,12 @@ def train_cyclegan(config):
             G_YtoX.train()
         
         # Save checkpoint every N epochs
-        if (epoch + 1) % config.get('save_every', 10) == 0:
+        if (epoch + 1) % config.get('save_every', 10) == 0 or is_best:
             vprint(f"Saving checkpoint at epoch {epoch+1}...", level=1)
             models = {'G_XtoY': G_XtoY, 'G_YtoX': G_YtoX, 'D_X': D_X, 'D_Y': D_Y}
             optimizers = {'G_opt': g_optimizer, 'D_X_opt': d_x_optimizer, 'D_Y_opt': d_y_optimizer}
             metrics = {'g_loss': avg_g_loss, 'd_loss': avg_d_loss}
-            checkpoint_manager.save_checkpoint(epoch, models, optimizers, metrics)
+            checkpoint_manager.save_checkpoint(epoch, models, optimizers, metrics, is_best)
             
             # Log sample images
             vprint("Logging sample images to W&B...", level=2)
