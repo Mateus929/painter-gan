@@ -7,6 +7,7 @@ from models.cyclegan import Generator, Discriminator
 from training.checkpoint_manager import CheckpointManager
 from training.losses import identity_loss, cycle_consistency_loss, adversarial_loss
 from training.monet_dataset import MonetDataset, get_transforms
+from eval.eval import evaluate_model
 
 
 def train_cyclegan(config):
@@ -231,7 +232,7 @@ def train_cyclegan(config):
                 generator=G_XtoY,
                 config=config,
                 epoch=epoch,
-                eval_images_dir=eval_images_dir,
+                eval_images_dir="tmp/run_id",
                 device=device
             )
             
