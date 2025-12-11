@@ -1,0 +1,11 @@
+torch
+torchvision
+Pillow
+albumentations
+numpy
+scipy
+tqdm
+wandb
+pandas
+matplotlib
+seaborn
