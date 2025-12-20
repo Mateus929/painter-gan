@@ -62,3 +62,26 @@ def identity_loss(real_images, same_images, lambda_identity=LAMBDA_IDENTITY):
         torch.Tensor: The weighted L1 loss.
     """
     return lambda_identity * F.l1_loss(same_images, real_images)
+
+def compute_contrastive_loss(feat_q_list, feat_k_list, netF_list, nce_loss, lambda_NCE=1.0):
+    """
+    Compute contrastive loss across multiple layers
+    
+    Args:
+        feat_q_list: List of query features from generated image (multiple layers)
+        feat_k_list: List of key features from input image (multiple layers)
+        netF_list: List of PatchSampleF networks for each layer
+        nce_loss: PatchNCELoss module
+        lambda_NCE: Weight for NCE loss
+    """
+    total_nce_loss = 0.0
+    num_layers = len(feat_q_list)
+    
+    for feat_q, feat_k, netF in zip(feat_q_list, feat_k_list, netF_list):
+        feat_q_proj = netF(feat_q)
+        feat_k_proj = netF(feat_k)
+        
+        loss = nce_loss(feat_q_proj, feat_k_proj)
+        total_nce_loss += loss
+    
+    return (total_nce_loss / num_layers) * lambda_NCE
