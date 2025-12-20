@@ -8,7 +8,7 @@ from training.losses import identity_loss, cycle_consistency_loss, adversarial_l
 from training.random_monet_dataset import MonetDataset, get_train_transforms, get_val_transforms
 import glob
 from sklearn.model_selection import train_test_split
-from image_folder_dataset import ImageOnlyDataset, get_eval_transforms
+from training.image_folder_dataset import ImageOnlyDataset, get_eval_transforms
 from eval.main_eval import evaluate_mifid
 
 def split_domains(monet_dir, photo_dir, val_ratio=0.1, seed=42):
