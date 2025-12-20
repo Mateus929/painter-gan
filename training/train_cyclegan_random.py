@@ -46,8 +46,8 @@ def train_cyclegan(config):
     vprint(f"Using device: {device}")
 
     # ------------------ Models ------------------
-    G_XtoY = Generator(config["num_residual_blocks"]).to(device)
-    G_YtoX = Generator(config["num_residual_blocks"]).to(device)
+    G_XtoY = Generator(num_residual_blocks=config["num_residual_blocks"]).to(device)
+    G_YtoX = Generator(num_residual_blocks=config["num_residual_blocks"]).to(device)
     D_X = Discriminator().to(device)
     D_Y = Discriminator().to(device)
 
