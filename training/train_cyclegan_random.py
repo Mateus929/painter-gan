@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 from training.image_folder_dataset import ImageOnlyDataset, get_eval_transforms
 from eval.main_eval import evaluate_mifid
 
-def split_domains(monet_dir, photo_dir, val_ratio=0.1, seed=42):
+def split_domains(monet_dir, photo_dir, val_ratio=0.3, seed=42):
     monet_files = glob.glob(f"{monet_dir}/*.jpg")
     photo_files = glob.glob(f"{photo_dir}/*.jpg")
 
@@ -102,15 +102,17 @@ def train_cyclegan(config):
     )
 
     start_epoch = 0
-    if config.get("resume_training", False):
-        ckpt = checkpoint_manager.get_latest_checkpoint()
-        if ckpt:
-            models = dict(G_XtoY=G_XtoY, G_YtoX=G_YtoX, D_X=D_X, D_Y=D_Y)
-            opts = dict(G_opt=g_optimizer, D_X_opt=d_x_optimizer, D_Y_opt=d_y_optimizer)
-            start_epoch, _ = checkpoint_manager.load_checkpoint(ckpt, models, opts)
-            start_epoch += 1
+    latest_checkpoint = checkpoint_manager.get_latest_checkpoint()
+    if latest_checkpoint and config['resume_training']:
+        vprint(f"Resuming from checkpoint: {latest_checkpoint}", level=1)
+        models = {'G_XtoY': G_XtoY, 'G_YtoX': G_YtoX, 'D_X': D_X, 'D_Y': D_Y}
+        optimizers = {'G_opt': g_optimizer, 'D_X_opt': d_x_optimizer, 'D_Y_opt': d_y_optimizer}
+        start_epoch, _ = checkpoint_manager.load_checkpoint(latest_checkpoint, models, optimizers)
+        start_epoch += 1
+        vprint(f"Resuming from epoch {start_epoch}", level=1)
 
     # ------------------ Training ------------------
+    vprint(f"\nStarting training for {config['num_epochs'] - start_epoch} epochs...\n", level=1)
     for epoch in range(start_epoch, config["num_epochs"]):
         G_XtoY.train()
         G_YtoX.train()
@@ -269,9 +271,10 @@ def train_cyclegan(config):
 
         # =================== SAVE ===================
         if (epoch + 1) % config.get("save_every", 10) == 0:
-            models = dict(G_XtoY=G_XtoY, G_YtoX=G_YtoX, D_X=D_X, D_Y=D_Y)
-            opts = dict(G_opt=g_optimizer, D_X_opt=d_x_optimizer, D_Y_opt=d_y_optimizer)
-            checkpoint_manager.save_checkpoint(epoch, models, opts, {})
+            models = {'G_XtoY': G_XtoY, 'G_YtoX': G_YtoX, 'D_X': D_X, 'D_Y': D_Y}
+            optimizers = {'G_opt': g_optimizer, 'D_X_opt': d_x_optimizer, 'D_Y_opt': d_y_optimizer}
+            # metrics = {'g_loss': avg_g_loss, 'd_loss': avg_d_loss}
+            checkpoint_manager.save_checkpoint(epoch, models, optimizers, {})
 
     print("\n" + "="*80)
     print("🔍 Running final MiFID evaluation")
