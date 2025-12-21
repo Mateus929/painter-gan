@@ -34,7 +34,7 @@ def train_cut(config):
             print(msg)
 
     # ------------------ W&B ------------------
-    run_id = config.get("run_id", uuid.uuid4().hex[:8])
+    run_id = config.get("run_id", str(uuid.uuid4().hex[:8]))
     wandb.init(
         project="monet-cut",
         name=config["run_name"],
