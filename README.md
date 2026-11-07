@@ -47,18 +47,12 @@ We then tried extending training to 50 epochs using the same parameters, althoug
 - **Results at 50 epochs:** MiFID increased to 1095.
 - **Analysis:** Although the FID score of 85 was relatively low and favorable, the high MiFID score suggested that the model had begun memorizing the training data, as reflected in MiFID’s memorization penalty.
 
-[View `base_run` details on WandB](https://wandb.ai/MLBeasts/monet-cyclegan/runs/19b7ed35?nw=nwuserzhorzholianimate)
-
-[View `cyclegan_default_run` details on WandB](https://wandb.ai/MLBeasts/monet-cyclegan/runs/6ffa9e28?nw=nwuserzhorzholianimate)
-
 #### 2.2.2. `mifid_safe_run`
 
 To improve the MiFID score and reduce memorization, we conducted an experiment called **`mifid_safe_run`**. In this run, we changed the loss weights to `lambda_cycle = 5` and `lambda_id = 0`. The aim was to give the model greater freedom in interpreting the style and reduce strict structural constraints.
 
 - **Results:** FID - 235; MiFID - 1235.
 - **Analysis:** Although the memorization score improved slightly, the overall MiFID score became substantially worse because of the sharp increase in FID. The model lost image quality and structural accuracy.
-
-[View `mifid_safe_run` details on WandB](https://wandb.ai/MLBeasts/monet-cyclegan/runs/8989d233?nw=nwuserzhorzholianimate)
 
 #### 2.2.3. Interim Conclusion
 
@@ -82,8 +76,6 @@ First, we conducted a short, 10-epoch test called **`256px_fast_run`**, using th
 
 Although the FID score was relatively low and favorable, the high MiFID score indicated that the model remained prone to memorization even after a short training period.
 
-[View `256px_fast_run` on WandB](https://wandb.ai/MLBeasts/monet-cyclegan/runs/2c415937?nw=nwuserzhorzholianimate)
-
 #### 2.3.2. Random Batch Pairing Methodology
 
 To address memorization, I changed the data-loading logic. Instead of the fixed photo–painting pairings often used during training in conventional CycleGAN setups, I introduced **random batch pairing**. With this approach, each photograph was paired with a randomly selected painting at every training step, encouraging the model to learn the general style rather than memorize specific pairs.
@@ -95,14 +87,12 @@ Two main 30-epoch runs used this method:
    We used the parameters from the original paper: `lambda_cycle = 10` and `lambda_identity = 5`.
 
    - **Results:** FID - 196; MiFID - 638.
-   - [View the run on WandB](https://wandb.ai/MLBeasts/monet-cyclegan/runs/99d1241b?nw=nwuserzhorzholianimate)
 
 2. **`random_batch_cyclegan_256_ptx_low_mem` - Safe Parameters**
 
    We reduced the loss weights to prevent memorization: `lambda_cycle = 5` and `lambda_identity = 0`.
 
    - **Results:** FID - 197; MiFID - 686.
-   - [View the run on WandB](https://wandb.ai/MLBeasts/monet-cyclegan/runs/6b0195ad?nw=nwuserzhorzholianimate)
 
 #### 2.3.3. Comparison and Analysis of Results
 
@@ -158,7 +148,7 @@ cut_config_optimal = {
 
 ### 3.3. Experimental Results: 50 Epochs
 
-The simplicity of the CUT architecture, with only one generator, allowed us to train the model for **50 epochs**, which had not been feasible for the full CycleGAN setup given our resource constraints. Several simplified versions were also tested early on to develop intuition ([example run](https://wandb.ai/MLBeasts/monet-cut/runs/00b2e0ec)), but the main focus was the “Optimal” run.
+The simplicity of the CUT architecture, with only one generator, allowed us to train the model for **50 epochs**, which had not been feasible for the full CycleGAN setup given our resource constraints. Several simplified versions were also tested early on to develop intuition, but the main focus was the “Optimal” run.
 
 **Results:**
 
@@ -177,8 +167,6 @@ The training process approached full convergence.
 Over 50 epochs, CUT demonstrated strong stability and good content preservation, achieving an FID of 150 and a MiFID of 550. However, some weaknesses also emerged. The model successfully avoided memorizing the data because of its less conservative nature, but the contrastive objective, measured by NCE loss, had still not fully converged after 50 epochs. This suggested that the model sometimes “hallucinated” additional artistic elements at the expense of the original image’s semantics.
 
 Overall, CUT is a fast and efficient solution, although its loss functions require careful balancing to preserve visual fidelity as much as possible.
-
-[View the complete `cut-monet-optimal` run on WandB](https://wandb.ai/MLBeasts/monet-cut/runs/9db4f35e)
 
 ## 4. Final Summary and Comparative Analysis
 
